@@ -1,0 +1,260 @@
+import requests
+from bs4 import BeautifulSoup
+
+#partie office box
+
+#l'url doit correspondre a la page des meilleurs films d'une certaine année, on s'interesse uniquement au premiers 10 films
+def top_titres(url):
+    response = requests.get(url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    titles = []
+    links = []
+    liste = soup.find_all("a" , class_="a-link-normal")
+    for i in range (17, 27):
+        titles.append(liste[i].text)
+        links.append("https://www.boxofficemojo.com" + liste[i].get("href")) 
+    return titles, links
+
+    
+#donne une liste contenant les pays , gross et oppening
+def every_country(url):
+    response = requests.get(url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    liste = soup.find_all('tr')
+    table = []
+    texte_liste = []
+    for element in liste : 
+        if (element.text in ['Domestic', 'MarketRelease DateOpeningGross','Europe, Middle East, and Africa','Asia Pacific','Latin America','China']):
+            continue
+        else:
+            texte_liste.append(element.text)
+    return texte_liste
+
+#necessaire apres every_country:
+def separate_elements(input_list):
+    output_list = []
+    for item in input_list:
+        if ('$' in item):
+            parts = item.split('$')
+            country_and_date = parts[0].split('\n')[0].strip()  # Extraire le pays et la date avant le premier "$" ou "\n" 
+            revenue = int(parts[1].replace(',', '').strip())  # Extraire la valeur après le deuxième "$
+            output_list.append([country_and_date, revenue])
+
+    return output_list
+
+countries = ['Domestic', 'Austria', 'Bahrain', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'East Africa', 'Egypt', 'Estonia', 'Finland', 'France', 'Germany', 'Ghana', 'Greece', 'Hungary', 'Iceland', 'Israel', 'Italy', 'Jordan', 'Kenya', 'Kuwait', 'Latvia', 'Lebanon', 'Lithuania', 'Netherlands', 'Nigeria', 'Norway', 'Oman', 'Poland', 'Portugal', 'Qatar', 'Romania', 'Russia' 'Serbia and Montenegro', 'Slovakia', 'Slovenia', 'South Africa', 'Spain', 'Sweden', 'Switzerland', 'Cyprus', 'Türkiye', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'Argentina', 'Aruba', 'Bolivia', 'Brazil', 'Chile', 'Colombia', 'Dominican Republic', 'Ecuador', 'Jamaica', 'Mexico', 'Paraguay', 'Peru', 'Trinidad & Tobago','Uruguay', 'Venezuela', 'Australia', 'Hong Kong', 'India', 'Indonesia', 'Japan', 'Malaysia', 'Mongolia', 'New Zealand', 'Pakistan', 'Philippines', 'Russia/CIS', 'Singapore', 'South Korea', 'Taiwan', 'Thailand', 'Vietnam', 'China']
+def countries_uncluded(input_list):
+    output_list = separate_elements(input_list)
+    prefixes = [country for country in countries if any(sublist[0].startswith(country) for sublist in output_list)]
+    return prefixes
+
+
+def find_index(lst, value):
+    for index, sublist in enumerate(lst):
+        if len(sublist) > 1 and sublist[1] == value:
+            return index
+    return None
+
+#savoir les pays ou un certain film a ete regardé le plus
+def top_countries(url):
+    input_list = every_country(url)
+    output_list = separate_elements(input_list)
+    country_revenues = {}
+    for item in output_list:
+        country_revenues[item[0]] = max(country_revenues.get(item[0], 0), item[1])
+    top_countries = sorted(country_revenues.items(), key=lambda x: x[1], reverse=True)[:5]
+    return top_countries
+
+#ordonner le resultat dans un dictionnaire:
+dict = {}
+def dictio(liens,titres):
+    if (len(liens)==len(titres)):
+        for i in range (len(titres)):
+            dict[titres[i]] = top_countries(liens[i])
+    return dict
+
+#representer les données scrappées plus clairement:
+def representation(dict):
+    for film, details in dict.items():
+        print(film)
+        print('-' * len(film))
+        for country, revenue in details:
+            print(f"{country}: ${revenue}")
+        print()
+
+#liste des liens de pages de box offices des meilleurs films de 2018 à 2023:
+liens_box_office = ["https://www.boxofficemojo.com/year/world/2018/", "https://www.boxofficemojo.com/year/world/2019/", "https://www.boxofficemojo.com/year/world/2020/", "https://www.boxofficemojo.com/year/world/2021/", "https://www.boxofficemojo.com/year/world/2022/", "https://www.boxofficemojo.com/year/world/2023/"]
+
+#url de rotten tomatoes
+url_tom = "https://www.rottentomatoes.com/browse/movies_in_theaters/?page=3"
+
+#liste des liens de pages de box offices des meilleurs films de 2018 à 2023:
+liens_box_office = ["https://www.boxofficemojo.com/year/world/2018/", "https://www.boxofficemojo.com/year/world/2019/", "https://www.boxofficemojo.com/year/world/2020/", "https://www.boxofficemojo.com/year/world/2021/", "https://www.boxofficemojo.com/year/world/2022/", "https://www.boxofficemojo.com/year/world/2023/"]
+
+"""#essai de la premiere partie 
+for k in range(len(liens_box_office)) :
+    titres_ , liens_ = top_titres(liens_box_office[k])
+    print("\n les pays des meilleures ventes de tickets relatives à chacun des top films de l'année: ",k + 2018)
+    #print("Le dictionnaire des top films de l'année ",k + 2018, "est:\n",dictio(liens_, titres_))
+    print("\n\n")
+    representation(dictio(liens_, titres_))"""
+
+#partie rotten tomatoe
+
+#recuperer tous les films et leurs liens
+les_films_ = []
+les_liens_ = []
+
+for i in range(0,6):
+    url_ = liens_box_office[i]
+    titres_ , liens_ = top_titres(url_)
+    les_films_ += titres_
+    les_liens_ += liens_
+
+reponse_tom = requests.get(url_tom)
+soup_tom = BeautifulSoup(reponse_tom.text , 'html.parser')
+
+#on insere un titre , figurant dans la liste de boc office, pour chercher ses infos sur rotten tomatoes :
+def lien_recherche(titre):
+    url_rech = "https://www.rottentomatoes.com/search?search="
+    for i in titre:
+        if i == ' ':
+            url_rech += "%20"
+        elif i == ':':
+            url_rech += "%3A"
+        else:
+            url_rech += i
+    return url_rech
+    
+#peut etre utilisée au cas ou il est plus facile de menipuler une liste de titres:
+def liens_rech(titres_liste):
+    liste = []
+    for i in titres_liste:
+        liste.append(lien_recherche(i))
+    return liste
+
+#determiner le lien de la page relative au film intitulé titre:
+lettre = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890'
+def lien_du_film(titre):
+    URL = "https://www.rottentomatoes.com/m/"
+    for i in titre:
+        if i in lettre:
+            URL += i.lower()
+        elif URL[-1] == '_':
+            continue
+        else:
+            URL += "_"
+    return URL
+        
+#informations des films
+def film_info(url):
+    rps = requests.get(url)
+    sp = BeautifulSoup(rps.text, 'html.parser')
+    cleaned_info = []
+    info_til = [
+        ('Rating:', 'RATING'),
+        ('Genre:', 'GENRE'),
+        ('Original Language:', 'LANGUE'),
+        ('Director:', 'REALISATEUR'),
+        ('Producer:', 'PRODUCTEUR'),
+        ('Writer:', 'ECRIVAIN'),
+        ('Runtime:', 'DUREE'),
+        ('Distributor:', 'DISTRIBUTEUR'),
+        ('Production Co:', 'COPRODUCTEUR')
+    ]
+    for label, key in info_til:
+        element = sp.find(string=label)
+        if element:
+            value = element.find_next('span').text.strip().split(',')
+            cleaned_info.append([key, [item.strip() for item in value]])
+        else:
+            cleaned_info.append([key, ["pas d'information"]])
+
+    return cleaned_info
+
+lien_recherche_titres = liens_rech(les_films_)
+
+def chercher(thing):
+    liste_genre = []
+    liste_langue = []
+    liste_distr = []
+    for i in thing:
+        if i[0] == 'GENRE':
+            liste_genre += i[1]
+        elif i[0] == 'LANGUE':
+            liste_langue+=i[1]
+        elif i[0] == 'DISTRIBUTEUR':
+            liste_distr+=i[1]
+    return liste_genre, liste_langue, liste_distr
+
+def representation_thing(list):
+    for i in list[1:]:
+        print(i[0],":")
+        for j in i[1:]:
+            for k in j:
+                print("\t",k)
+            print("\n")
+    print("\n")
+    
+    
+
+
+LA_liste_genres =[]
+LA_liste_langues = []
+LA_liste_distrs = []
+
+for i in range(len(les_films_)):
+    if i == 0:
+        print("\tANNEE 2018\n")
+    elif i ==10:
+        print("\tANNEE 2019\n")
+    elif i ==20:
+        print("\tANNEE 2020\n")
+    elif i ==30:
+        print("\tANNEE 2021\n")
+    elif i == 40:
+        print("\tANNEE 2022\n")
+    elif i == 50:
+        print("\tANNEE 2023\n")
+
+    print(les_films_[i])
+    if(les_films_[i] == "F9: The Fast Saga"):
+        thing = film_info("https://www.rottentomatoes.com/m/f9")
+    elif(les_films_[i]=="Water Gate Bridge"):
+        thing = film_info("https://www.rottentomatoes.com/m/the_battle_at_lake_changjin_water_gate_bridge")
+    elif(les_films_[i] == "Oppenheimer"):
+        thing = film_info("https://www.rottentomatoes.com/m/oppenheimer_2023")
+    elif(les_films_[i]=="Star Wars: Episode IX - The Rise of Skywalker"):
+        thing = film_info("https://www.rottentomatoes.com/m/star_wars_the_rise_of_skywalker")
+    else:
+        link_3 = lien_du_film(les_films_[i])
+        thing = film_info(link_3)
+        thing.insert(0,['TITRE',[les_films_[i]]])
+    representation_thing(thing)
+    print("\n")
+    
+
+    liste_genres , liste_langues, liste_distrs = chercher(thing)
+    LA_liste_genres += liste_genres
+    LA_liste_langues += liste_langues
+    LA_liste_distrs += liste_distrs
+
+    tous_genres =['Action', 'Adventure', 'Animation','Comedy', 'Documentary', 'Drama', 'Fantasy', 'History', 'Kids & family', 'Musical', 'Mystery & thriller', 'Sci-fi', 'War']
+    toutes_langues =['English', 'Chinese', 'Korean', 'French', 'German', 'Arabic', 'Indian']
+    tous_distributeurs = ['Columbia Pictures', 'Sony Pictures Entertainment','Walt Disney','Walt Disney Pictures','Warner Bros. Pictures','20th Century Fox', 'Paramount Pictures','Universal Pictures']
+    
+print(liste_genres)
+
+#calculer la frequence d'un element:
+print("\nla frequence des genres:\n")
+for gr in tous_genres:
+    freq = LA_liste_genres.count(gr)
+    print(gr,":\t",freq)
+print("\nla frequence des langues:\n")    
+for lg in toutes_langues:
+    freq = LA_liste_langues.count(lg)
+    print(lg,":\t",freq)
+print("\nla frequence des dictributeurs:\n")
+for ds in tous_distributeurs:
+    freq = LA_liste_distrs.count(ds)
+    print(ds,":\t",freq)
